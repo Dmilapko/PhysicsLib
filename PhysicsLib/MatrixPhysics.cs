@@ -8,61 +8,67 @@ using MonoHelper;
 
 namespace Physics
 {
-    public class Force
+
+    public class MatrixPhysics
     {
-        public PointF pos; public float angle; public float force;
-
-        public Force(PointF _pos, float _angle, float _force)
+        public class MP_Object : PhysicsObject
         {
-            pos = _pos;
-            angle = _angle;
-            force = _force;
-        }
-    }
+            public List<PointF> points = new List<PointF>();
+            public float x, y, realx, realy;
+            public float dir = 0;
+            public List<Force> forces = new List<Force>();
 
-    public class PhysicsObject
-    {
-        //public delegate void MOIF();
-        //public MOIF MonentOfInertia;
-        public float MonentOfInertia;
-        /// <summary>
-        /// Angular speed in degrees
-        /// </summary>
-        public float angularvelocity = 0;
-        /// <summary>
-        /// Mass of object in kilos
-        /// </summary>
-        public float mass;
-        /// <summary>
-        /// Vector of speed
-        /// </summary>
-        public PointF speed = new PointF(0, 0);
+            public MP_Object(float _MomentOfInertia, float _mass, PointF _position, List<PointF> _points)
+            {
+                MonentOfInertia = _MomentOfInertia;
+                mass = _mass;
+                x = _position.X;
+                y = _position.Y;
+                points = _points;
+            }
 
-        public PhysicsObject()
-        {
+            public override void ApplyForce(PointF pos, float angle, float force)
+            {
+                base.ApplyForce(pos, angle, force);
+                forces.Add(new Force(pos, angle, force));
+            }
 
+            public virtual void Run()
+            {
+
+            }
         }
 
-        public PhysicsObject(float _MomentOfInertia, float _mass)
+        public List<MP_Object> objects;
+        public List<List<bool>> matrix;
+        public float pim;
+        public int fps;
+
+        public MatrixPhysics(List<MP_Object> _objects, List<List<bool>> _matrix, float pixels_in_meter, int _fps)
         {
-            MonentOfInertia = _MomentOfInertia;
-            mass = _mass;
+            objects = _objects;
+            matrix = _matrix;
+            pim = pixels_in_meter;
+            fps = _fps;
         }
 
-        /// <summary>
-        /// Apply force in N(Newtons)
-        /// </summary>
-        /// <param name="pos"></param>
-        /// <param name="angle">Angle in radians</param>
-        /// <param name="force"></param>
-        public virtual void ApplyForce(PointF pos, float angle, float force)
+        private void RunObjPhysics(MP_Object obj)
         {
-            //angle - Math.Atan2(pos.X, pos.Y) angle between ANGLE and tangent
-            float torque = (float)(force * Math.Sqrt(pos.X * pos.X + pos.Y * pos.Y) * Math.Sin(angle - Math.Atan2(pos.X, pos.Y)));
-            angularvelocity += (torque / MonentOfInertia);
+            obj.forces.Clear();
+            obj.Run();
+            //float nextx, nexty;
+            obj.dir += obj.angularvelocity / (float)fps;
+            obj.x += obj.speed.X * pim / (float)fps;
+            obj.y += obj.speed.Y * pim / (float)fps;
+            obj.dir = obj.dir % 360.ToRadians();
+        }
 
-            speed.X += force * (float)Math.Sin(angle) / mass;
-            speed.Y += force * (float)Math.Cos(angle) / mass;
+        public void Run()
+        {
+            foreach (MP_Object obj in objects)
+            {
+                RunObjPhysics(obj);
+            }
         }
     }
 }
