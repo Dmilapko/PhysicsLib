@@ -10,7 +10,18 @@ namespace Physics
 {
     public class Force
     {
-        public PointD pos; public double angle; public double force;
+        /// <summary>
+        /// Position of object to apply the force
+        /// </summary>
+        public PointD pos;
+        /// <summary>
+        /// Angle in radians
+        /// </summary>
+        public double angle;
+        /// <summary>
+        /// Force in N(Newtons)
+        /// </summary>
+        public double force;
 
         public Force(PointD _pos, double _angle, double _force)
         {
@@ -32,7 +43,7 @@ namespace Physics
         /// <summary>
         /// Mass of object in kilos
         /// </summary>
-        public double mass;
+        virtual public double mass { get; set; }
         /// <summary>
         /// Vector of speed
         /// </summary>
@@ -52,9 +63,9 @@ namespace Physics
         /// <summary>
         /// Apply force in N(Newtons)
         /// </summary>
-        /// <param name="pos"></param>
+        /// <param name="pos">Position of object to apply the force</param>
         /// <param name="angle">Angle in radians</param>
-        /// <param name="force"></param>
+        /// <param name="force">Force in N(Newtons)</param>
         public virtual void ApplyForce(PointD pos, double angle, double force)
         {
             //angle - Math.Atan2(pos.X, pos.Y) angle between ANGLE and tangent
@@ -63,6 +74,15 @@ namespace Physics
 
             speed.X += (float)(force * Math.Sin(angle) / mass);
             speed.Y += (float)(force * Math.Cos(angle) / mass);
+        }
+
+        /// <summary>
+        /// Apply force in N(Newtons)
+        /// </summary>
+        /// <param name="force">Force applied</param>
+        public virtual void ApplyForce(Force force)
+        {
+            ApplyForce(force.pos, force.angle, force.force);
         }
     }
 }
