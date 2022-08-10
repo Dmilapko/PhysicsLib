@@ -92,7 +92,7 @@ namespace Physics
         }
 
         public List<MP_Object> objects;
-        public List<int> matrix = new List<int>();
+        public List<double> matrix = new List<double>();
         public double pim;
         public double fps;
         public int precision;
@@ -111,9 +111,9 @@ namespace Physics
             }
         }
 
-        public void SetMatrix(List<int> _matrix)
+        public void SetMatrix(List<double> _matrix)
         {
-            matrix = new List<int>(_matrix);
+            matrix = new List<double>(_matrix);
         }
 
         public void SetMatrix(Microsoft.Xna.Framework.Graphics.Texture2D texture, List<Microsoft.Xna.Framework.Color> true_data)
@@ -132,26 +132,51 @@ namespace Physics
             }
         }
 
-        public Microsoft.Xna.Framework.Graphics.Texture2D SetMatrix(Microsoft.Xna.Framework.Graphics.GraphicsDevice graphics, List<int> surface, int height, Microsoft.Xna.Framework.Color surface_color, Microsoft.Xna.Framework.Color outline_color)
+        public Microsoft.Xna.Framework.Graphics.Texture2D GetTexture(Microsoft.Xna.Framework.Graphics.GraphicsDevice graphics, int height, Microsoft.Xna.Framework.Color surface_color, Microsoft.Xna.Framework.Color outline_color, bool smoothed = true)
         {
-            SetMatrix(surface);
-            Microsoft.Xna.Framework.Graphics.Texture2D texture = new Microsoft.Xna.Framework.Graphics.Texture2D(graphics, surface.Count, height);
-            Microsoft.Xna.Framework.Color[] cd = new Microsoft.Xna.Framework.Color[height * surface.Count];
+            Microsoft.Xna.Framework.Graphics.Texture2D texture = new Microsoft.Xna.Framework.Graphics.Texture2D(graphics, matrix.Count, height);
+            Microsoft.Xna.Framework.Color[] cd = new Microsoft.Xna.Framework.Color[height * matrix.Count];
             texture.GetData(cd);
-            for (int x = 0; x < surface.Count; x++)
+            for (int x = 0; x < matrix.Count; x++)
             {
-                for (int y = 0; y < surface[x] - 1; y++)
+                int pixel_h = (int)matrix[x];
+                for (int y = 0; y < pixel_h - 1; y++)
                 {
-                    if (((x != 0) && (matrix[x - 1] <= y)) || ((x != matrix.Count - 1) && (matrix[x + 1] <= y))) cd[y * surface.Count + x] = outline_color;
-                    else cd[y * surface.Count + x] = surface_color;
+                    if (((x != 0) && (matrix[x - 1] <= y)) || ((x != matrix.Count - 1) && (matrix[x + 1] <= y))) cd[y * matrix.Count + x] = outline_color;
+                    else cd[y * matrix.Count + x] = surface_color;
                 }
-                cd[((surface[x]-1) * surface.Count) + x] = outline_color;
+                cd[(pixel_h - 1) * matrix.Count + x] = MHeleper.MixTwoColorsNA(new Microsoft.Xna.Framework.Color(surface_color, (float)matrix[x] - pixel_h), new Microsoft.Xna.Framework.Color(outline_color, 1 - (float)matrix[x] + pixel_h));
+                cd[(pixel_h) * matrix.Count + x] = new Microsoft.Xna.Framework.Color(outline_color, (float)matrix[x] - pixel_h);
             }
             texture.SetData(cd);
             return texture;
         }
 
-        static public List<int> CreateSurface(int width, int min_width_diapason, int max_width_diapason, int min_height, int max_height)
+        static public List<double> SmoothSurface(List<int> list)
+        {
+            int prev_id = 0;
+            List<double> res = new List<double>();
+            list.Add(list[list.Count - 1] + 1);
+            for (int i = 1; i < list.Count; i++)
+            {
+                if (list[i] != list[prev_id])
+                {
+                    for (int j = prev_id; j < i; j++)
+                    {
+                        res.Add(list[prev_id] + (j - prev_id) / (double)(i - prev_id) * (list[i] - list[prev_id]));
+                    }
+                    prev_id = i;
+                }
+            }
+            return res;
+        }
+
+        public void SmothSurface()
+        {
+            SetMatrix(SmoothSurface(matrix.Select(i => (int)i).ToList()));
+        }
+
+        static public List<double> CreateSurface(int width, int min_width_diapason, int max_width_diapason, int min_height, int max_height)
         {
             List<Microsoft.Xna.Framework.Vector2> points = new List<Microsoft.Xna.Framework.Vector2>();
             double prev = min_height + MHeleper.RandomDouble() * (max_height - min_height);
@@ -171,7 +196,7 @@ namespace Physics
                 rd = (int)Math.Round(min_width_diapason + MHeleper.RandomDouble() * (max_width_diapason - min_width_diapason));
                 x += rd;
             } while (x - rd < width);
-            return MHeleper.CreateCurve(width, max_height, points);
+            return SmoothSurface(MHeleper.CreateCurve(width, max_height, points));
         }
 
         public MatrixPhysics(List<MP_Object> _objects, double pixels_in_meter, double _fps, int _precision)
@@ -192,15 +217,21 @@ namespace Physics
         public bool? GetMatrixState(PointD position)
         {
             position *= pim;
-            position.X = Math.Round(position.X);
-            if ((position.X > 0) && (position.X < matrix.Count)) 
+            if ((position.X > -0.5) && (position.X < (matrix.Count - 0.5))) 
             {
-                return (position.Y < matrix[(int)position.X]);
+                return position.Y < GetMatrixHeight(position.X);
             }
             else return null;
         }
 
-        public double GetSurfaceAngle(int position)
+        public double GetMatrixHeight(double x)
+        {
+            int prevpos = Math.Max(0, (int)x);
+            int nextpos = Math.Min(matrix.Count - 1, (int)x + 1);
+            return matrix[prevpos] + (x - prevpos) / 1d * (matrix[nextpos] - matrix[prevpos]);
+        }
+
+    /*    public double GetSurfaceAngle(int position)
         {
             int toend = matrix.Count() - position - 1;
             PointD point;
@@ -209,98 +240,51 @@ namespace Physics
             else point = new PointD(20, matrix[position + 10] - matrix[position - 10]);
             return Math.Atan2(point.X, point.Y);
 
+        }*/
+
+        public double GetSurfaceAngle(double position)
+        {
+            double toend = matrix.Count() - position - 1;
+            PointD point;
+            if (position < 10) point = new PointD(21, matrix[20] - matrix[0]);
+            else if (toend < 10) point = new PointD(21, matrix[matrix.Count - 1] - matrix[matrix.Count - 21]);
+            else point = new PointD(21, GetMatrixHeight(position + 10) - GetMatrixHeight(position - 10));
+            return Math.Atan2(point.X, point.Y);
+
         }
 
-        /*        private void RunObjPhysics(MP_Object obj)
+        /*private void RunObjPhysics(MP_Object obj)
+        {
+            if (obj.alive)
+            {
+                obj.forces.Clear();
+                obj.Run();
+                PointD nextposition = obj.position; double nextrotation = obj.rotation;
+                nextrotation += obj.angularvelocity / fps;
+                nextposition.X += obj.speed.X / fps;
+                nextposition.Y += obj.speed.Y / fps;
+                nextrotation = nextrotation % 360.ToRadians();
+
+                List<Collision> collisions = new List<Collision>();
+
+                foreach (PointD point in obj.hitpoints)
                 {
-                    if (obj.alive)
+                    //Наступна позиція даної точки
+                    PointD col_pos = GetMatrixPosition(point, nextposition, nextrotation);
+                    bool? res = GetMatrixState(col_pos);
+                    if (res != null)
                     {
-                        obj.forces.Clear();
-                        obj.Run();
-                        PointD nextposition = obj.position; double nextrotation = obj.rotation;
-                        nextrotation += obj.angularvelocity / fps;
-                        nextposition.X += obj.speed.X / fps;
-                        nextposition.Y += obj.speed.Y / fps;
-                        nextrotation = nextrotation % 360.ToRadians();
-
-                        List<Collision> collisions = new List<Collision>();
-
-                        foreach (PointD point in obj.hitpoints)
+                        if (res == true)
                         {
-                            //Наступна позиція даної точки
-                            PointD col_pos = GetMatrixPosition(point, nextposition, nextrotation);
-                            bool? res = GetMatrixState(col_pos);
-                            if (res != null)
-                            {
-                                if (res == true)
-                                {
-                                    double l = 0, r = 1, mid;
-                                    double res_rotation = 0;
-                                    PointD res_position = new PointD(0,0);
-                                    for (int i = 0; i < precision; i++)
-                                    {
-                                        mid = (l + r) / 2d;
-                                        res_rotation = obj.rotation + mid * obj.angularvelocity / fps;
-                                        res_position = obj.position + mid * obj.speed / fps;
-                                        if (GetMatrixState(GetMatrixPosition(point, res_position, res_rotation)) == true)
-                                        {
-                                            r = mid;
-                                        }
-                                        else
-                                        {
-                                            l = mid;
-                                        }
-                                    }
-                                    PointD speed = (col_pos - GetMatrixPosition(point, res_position, res_rotation)) * fps;
-                                    double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y);
-                                    double surf_angle = GetSurfaceAngle((int)Math.Round(col_pos.X * pim));
-                                    double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle;
-                                    collisions.Add(new Collision(point, surf_angle, speed_abs * Math.Sin(col_angle), speed_abs * Math.Cos(col_angle), res_rotation, 1 / Math.Sin(col_angle)));
-                                    // alpha = 1/2 * pi - col_angle
-                                    // beta = col_angle
-                                    // perpendicular_to_suface  = speed * sin(col_angle)
-                                    // parallel_to_surface = speed * cos(col_angle)
-                                }
-                            }
-                            else
-                            {
-                                obj.Kill();
-                                return;
-                            }
-                        }
-                        double resmid = 0;
-                        if (collisions.Count!=0)
-                        {
-                            double initial_r = 1.05;
-                            if (collisions.Count >= 2) 
-                                initial_r = 1.1 / Math.Pow(Math.Cos((collisions[0].surface_angle - collisions[collisions.Count - 1].surface_angle) / 2), 2);
-                            double l = 0, r = initial_r / (double)collisions.Count(), mid;
-                            PointD initial_speed = obj.speed;
-                            double initial_angular_velociity = obj.angularvelocity;
+                            double l = 0, r = 1, mid;
+                            double res_rotation = 0;
+                            PointD res_position = new PointD(0,0);
                             for (int i = 0; i < precision; i++)
                             {
-                                obj.speed = initial_speed;
-                                obj.angularvelocity = initial_angular_velociity;
                                 mid = (l + r) / 2d;
-                                resmid = mid;
-                                foreach (Collision collision in collisions)
-                                {
-                                    double extrusion_force = Math.Max(0, collision.perpendicular_speed * obj.mass) * mid;
-                                    double friction_force = Math.Min(Math.Abs(collision.parallel_speed), Math.Max(0, collision.perpendicular_speed) * obj.friction_coefficient) * obj.mass * mid;
-                                    obj.ApplyForce(collision.pos.Turn(collision.object_rotation), collision.surface_angle - 0.5 * Math.PI, extrusion_force, i == (precision - 1));
-                                    obj.ApplyForce(collision.pos.Turn(collision.object_rotation), collision.surface_angle, -1 * collision.parallel_speed.GetSign() * friction_force, i == (precision - 1));
-                                }
-                                bool allout = true;
-                                foreach (Collision collision in collisions)
-                                {
-                                    PointD col_pos = GetMatrixPosition(collision.pos, obj.position + obj.speed / fps, obj.rotation + obj.angularvelocity / fps);
-                                    if (GetMatrixState(col_pos) == true)
-                                    {
-                                        allout = false;
-                                        break;
-                                    }
-                                }
-                                if (allout)
+                                res_rotation = obj.rotation + mid * obj.angularvelocity / fps;
+                                res_position = obj.position + mid * obj.speed / fps;
+                                if (GetMatrixState(GetMatrixPosition(point, res_position, res_rotation)) == true)
                                 {
                                     r = mid;
                                 }
@@ -309,26 +293,84 @@ namespace Physics
                                     l = mid;
                                 }
                             }
-                            obj.position += obj.speed / fps;
-                            obj.rotation += obj.angularvelocity / fps;
+                            PointD speed = (col_pos - GetMatrixPosition(point, res_position, res_rotation)) * fps;
+                            double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y);
+                            double surf_angle = GetSurfaceAngle(col_pos.X * pim);
+                            double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle;
+                            collisions.Add(new Collision(point, surf_angle, speed_abs * Math.Sin(col_angle), speed_abs * Math.Cos(col_angle), res_rotation));
+                            // alpha = 1/2 * pi - col_angle
+                            // beta = col_angle
+                            // perpendicular_to_suface  = speed * sin(col_angle)
+                            // parallel_to_surface = speed * cos(col_angle)
+                        }
+                    }
+                    else
+                    {
+                        obj.Kill();
+                        return;
+                    }
+                }
+                double resmid = 0;
+                if (collisions.Count!=0)
+                {
+                    double initial_r = 1.05;
+                    if (collisions.Count >= 2) 
+                        initial_r = 1.1 / Math.Pow(Math.Cos((collisions[0].surface_angle - collisions[collisions.Count - 1].surface_angle) / 2), 2);
+                    double l = 0, r = initial_r / (double)collisions.Count(), mid;
+                    PointD initial_speed = obj.speed;
+                    double initial_angular_velociity = obj.angularvelocity;
+                    for (int i = 0; i < precision; i++)
+                    {
+                        obj.speed = initial_speed;
+                        obj.angularvelocity = initial_angular_velociity;
+                        mid = (l + r) / 2d;
+                        resmid = mid;
+                        foreach (Collision collision in collisions)
+                        {
+                            double extrusion_force = Math.Max(0, collision.perpendicular_speed * obj.mass) * mid;
+                            double friction_force = Math.Min(Math.Abs(collision.parallel_speed), Math.Max(0, collision.perpendicular_speed) * obj.friction_coefficient) * obj.mass * mid;
+                            obj.ApplyForce(collision.pos.Turn(collision.object_rotation), collision.surface_angle - 0.5 * Math.PI, extrusion_force, i == (precision - 1));
+                            obj.ApplyForce(collision.pos.Turn(collision.object_rotation), collision.surface_angle, -1 * collision.parallel_speed.GetSign() * friction_force, i == (precision - 1));
+                        }
+                        bool allout = true;
+                        foreach (Collision collision in collisions)
+                        {
+                            PointD col_pos = GetMatrixPosition(collision.pos, obj.position + obj.speed / fps, obj.rotation + obj.angularvelocity / fps);
+                            if (GetMatrixState(col_pos) == true)
+                            {
+                                allout = false;
+                                break;
+                            }
+                        }
+                        if (allout)
+                        {
+                            r = mid;
                         }
                         else
                         {
-                            obj.rotation = nextrotation;
-                            obj.position = nextposition;
-                        }
-                        // check for death points
-                        // must be done after detection&reaction on colisions
-                        foreach (PointD point in obj.deathpoints)
-                        {
-                            if (GetMatrixState(GetMatrixPosition(point, obj.position, obj.rotation)).In(null, true))
-                            {
-                                obj.Kill();
-                                return;
-                            }
+                            l = mid;
                         }
                     }
-                }*/
+                    obj.position += obj.speed / fps;
+                    obj.rotation += obj.angularvelocity / fps;
+                }
+                else
+                {
+                    obj.rotation = nextrotation;
+                    obj.position = nextposition;
+                }
+                // check for death points
+                // must be done after detection&reaction on colisions
+                foreach (PointD point in obj.deathpoints)
+                {
+                    if (GetMatrixState(GetMatrixPosition(point, obj.position, obj.rotation)).In(null, true))
+                    {
+                        obj.Kill();
+                        return;
+                    }
+                }
+            }
+        }*/
 
         private void RunObjPhysics(MP_Object obj)
         {
@@ -353,12 +395,10 @@ namespace Physics
                     {
                         if (res == true)
                         {
-                            double surf_angle = GetSurfaceAngle((int)Math.Round(col_pos.X * pim));
-                            int step = 1;
-                            if (surf_angle < 0.5 * Math.PI) step = -1;
-                            int px = (int)Math.Round(col_pos.X * pim);
+                            double surf_angle = GetSurfaceAngle(col_pos.X * pim);
+                            double px = col_pos.X * pim;
                             double py = col_pos.Y * pim;
-                            double a = matrix[px] - py;
+                            double a = GetMatrixHeight(px) - py;
                             double par_s = a * Math.Sin(surf_angle) / pim * fps;
                             PointD speed = (col_pos - GetMatrixPosition(point, obj.position, obj.rotation)) * fps;
                             double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y);
