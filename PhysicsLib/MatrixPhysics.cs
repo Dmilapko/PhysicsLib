@@ -148,6 +148,26 @@ namespace Physics
                 cd[(pixel_h - 1) * matrix.Count + x] = MHeleper.MixTwoColorsNA(new Microsoft.Xna.Framework.Color(surface_color, (float)matrix[x] - pixel_h), new Microsoft.Xna.Framework.Color(outline_color, 1 - (float)matrix[x] + pixel_h));
                 cd[(pixel_h) * matrix.Count + x] = new Microsoft.Xna.Framework.Color(outline_color, (float)matrix[x] - pixel_h);
             }
+            if (smoothed)
+            {
+                for (int x = 1; x < matrix.Count; x++)
+                {
+                    if (Math.Abs(matrix[x-1]-matrix[x])>=1)
+                    {
+                        int px = x;
+                        int side_x = x - 1;
+                        if (matrix[x] > matrix[x - 1]) { px--; side_x++; }
+                        int top = (int)Math.Max(matrix[x], matrix[x - 1]);
+                        int bottom = (int)Math.Min(matrix[x], matrix[x - 1]);
+                        for (int y = bottom; y < top; y++)
+                        {
+                            double coef = (top - y - 0.5) / (double)(top - bottom);
+                            cd[y * matrix.Count + px] = new Microsoft.Xna.Framework.Color(outline_color, (float)coef);
+                            if (y!=top-1)cd[y * matrix.Count + side_x] = MHeleper.MixTwoColors(surface_color, new Microsoft.Xna.Framework.Color(outline_color, 1 -(float)coef));
+                        }
+                    }
+                }
+            }
             texture.SetData(cd);
             return texture;
         }
@@ -395,19 +415,47 @@ namespace Physics
                     {
                         if (res == true)
                         {
-                            double surf_angle = GetSurfaceAngle(col_pos.X * pim);
-                            double px = col_pos.X * pim;
-                            double py = col_pos.Y * pim;
-                            double a = GetMatrixHeight(px) - py;
-                            double par_s = a * Math.Sin(surf_angle) / pim * fps;
-                            PointD speed = (col_pos - GetMatrixPosition(point, obj.position, obj.rotation)) * fps;
-                            double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y);
-                            double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle;
-                            collisions.Add(new Collision(point, surf_angle, par_s, speed_abs * Math.Cos(col_angle), nextrotation));
-                            // alpha = 1/2 * pi - col_angle
-                            // beta = col_angle
-                            // perpendicular_to_suface  = speed * sin(col_angle)
-                            // parallel_to_surface = speed * cos(col_angle)
+                            bool? is_inside = GetMatrixState(GetMatrixPosition(point, obj.position, obj.rotation));
+                            if (is_inside == true)
+                            {
+                                double surf_angle = GetSurfaceAngle(col_pos.X * pim); // нахил поверхності
+                                PointD pixel_position = col_pos * pim; // піксельна позиція(не в метрах, а в пікселях)
+                                double depth = GetMatrixHeight(pixel_position.X) - pixel_position.Y; // глубина занурення у поверхню
+                                double perp_s = depth * Math.Sin(surf_angle) / pim * fps; // перпендикулярне занурення у поверхню
+                                PointD speed = (col_pos - GetMatrixPosition(point, obj.position, obj.rotation)) * fps; // швидкість даної точки[м/с] - вектор
+                                double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y); // скалярна величина швидкості даної точки[м/с]
+                                double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle; // кут зіткнення з повезхнею
+                                collisions.Add(new Collision(point, surf_angle, perp_s, speed_abs * Math.Cos(col_angle), nextrotation));
+                            }
+                            else if (is_inside == false)
+                            {
+                                double l = 0, r = 1, mid;
+                                double res_rotation = 0;
+                                PointD res_position = new PointD(0, 0);
+                                for (int i = 0; i < precision; i++)
+                                {
+                                    mid = (l + r) / 2d;
+                                    res_rotation = obj.rotation + mid * obj.angularvelocity / fps;
+                                    res_position = obj.position + mid * obj.speed / fps;
+                                    if (GetMatrixState(GetMatrixPosition(point, res_position, res_rotation)) == true)
+                                    {
+                                        r = mid;
+                                    }
+                                    else
+                                    {
+                                        l = mid;
+                                    }
+                                }
+                                PointD speed = (col_pos - GetMatrixPosition(point, res_position, res_rotation)) * fps;
+                                double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y);
+                                double surf_angle = GetSurfaceAngle(col_pos.X * pim);
+                                double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle;
+                                collisions.Add(new Collision(point, surf_angle, speed_abs * Math.Sin(col_angle), speed_abs * Math.Cos(col_angle), res_rotation));
+                                // alpha = 1/2 * pi - col_angle
+                                // beta = col_angle
+                                // perpendicular_to_suface  = speed * sin(col_angle)
+                                // parallel_to_surface = speed * cos(col_angle)
+                            }
                         }
                     }
                     else
