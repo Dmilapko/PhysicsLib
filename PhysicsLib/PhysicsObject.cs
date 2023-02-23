@@ -35,9 +35,9 @@ namespace Physics
     {
         //public delegate void MOIF();
         //public MOIF MonentOfInertia;
-        public double MonentOfInertia;
+        public double MonentOfInertiaKoef;
         /// <summary>
-        /// Angular speed in degrees
+        /// Angular speed in degrees per second
         /// </summary>
         public double angularvelocity = 0;
         /// <summary>
@@ -54,9 +54,9 @@ namespace Physics
 
         }
 
-        public PhysicsObject(float _MomentOfInertia, float _mass)
+        public PhysicsObject(double _MomentOfInertiaKoef, double _mass)
         {
-            MonentOfInertia = _MomentOfInertia;
+            MonentOfInertiaKoef = _MomentOfInertiaKoef;
             mass = _mass;
         }
 
@@ -70,7 +70,7 @@ namespace Physics
         {
             //angle - Math.Atan2(pos.X, pos.Y) angle between ANGLE and tangent
             double torque = (force * Math.Sqrt(pos.X * pos.X + pos.Y * pos.Y) * Math.Sin(angle - Math.Atan2(pos.X, pos.Y)));
-            angularvelocity += (torque / MonentOfInertia);
+            angularvelocity += (torque / MonentOfInertiaKoef / mass);
 
             speed.X += (float)(force * Math.Sin(angle) / mass);
             speed.Y += (float)(force * Math.Cos(angle) / mass);

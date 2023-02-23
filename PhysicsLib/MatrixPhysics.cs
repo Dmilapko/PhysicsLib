@@ -43,11 +43,13 @@ namespace Physics
             public List<Force> forces = new List<Force>();
             public bool alive = true;
             public event EventHandler on_death = null;
+            public event EventHandler on_collision = null;
             public double friction_coefficient;
+            public bool active = true;
 
-            public MP_Object(double _MomentOfInertia, double _mass, double _friction_coefficient, PointD _position)
+            public MP_Object(double _MomentOfInertiaKoef, double _mass, double _friction_coefficient, PointD _position)
             {
-                MonentOfInertia = _MomentOfInertia;
+                MonentOfInertiaKoef = _MomentOfInertiaKoef;
                 mass = _mass;
                 position = _position;
                 friction_coefficient = _friction_coefficient;
@@ -88,6 +90,11 @@ namespace Physics
             {
                 alive = false;
                 on_death?.Invoke(null, null);
+            }
+
+            public void Collide()
+            {
+                on_collision?.Invoke(null, null);
             }
         }
 
@@ -229,7 +236,7 @@ namespace Physics
 
         public PointD GetMatrixPosition(PointD point, PointD position, double rotation)
         {
-            double l = Math.Sqrt(point.X * point.X + point.Y * point.Y);
+            double l = point.Length();
             double d = rotation + (double)Math.Atan2(point.X, point.Y);
             return new PointD(position.X + Math.Sin(d) * l, position.Y + Math.Cos(d) * l);
         }
@@ -415,7 +422,7 @@ namespace Physics
                     {
                         if (res == true)
                         {
-                            bool? is_inside = GetMatrixState(GetMatrixPosition(point, obj.position, obj.rotation));
+                            bool? is_inside = GetMatrixState(GetMatrixPosition(point, obj.position, obj.rotation));//якщо позиція вже всередині
                             if (is_inside == true)
                             {
                                 double surf_angle = GetSurfaceAngle(col_pos.X * pim); // нахил поверхності
@@ -424,7 +431,7 @@ namespace Physics
                                 double perp_s = depth * Math.Sin(surf_angle) / pim * fps; // перпендикулярне занурення у поверхню
                                 PointD speed = (col_pos - GetMatrixPosition(point, obj.position, obj.rotation)) * fps; // швидкість даної точки[м/с] - вектор
                                 double speed_abs = Math.Sqrt(speed.X * speed.X + speed.Y * speed.Y); // скалярна величина швидкості даної точки[м/с]
-                                double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle; // кут зіткнення з повезхнею
+                                double col_angle = Math.Atan2(speed.X, speed.Y) - surf_angle; // кут зіткнення з поверхнею
                                 collisions.Add(new Collision(point, surf_angle, perp_s, speed_abs * Math.Cos(col_angle), nextrotation));
                             }
                             else if (is_inside == false)
@@ -467,6 +474,7 @@ namespace Physics
                 double resmid = 0;
                 if (collisions.Count != 0)
                 {
+                    obj.Collide();
                     double initial_r = 1.05;
                     if (collisions.Count >= 2)
                         initial_r = 1.1 / Math.Pow(Math.Cos((collisions[0].surface_angle - collisions[collisions.Count - 1].surface_angle) / 2), 2);
@@ -531,7 +539,7 @@ namespace Physics
             foreach (MP_Object obj in objects)
             {
                 obj.BeforeRun();
-                RunObjPhysics(obj);
+                if (obj.active) RunObjPhysics(obj);
                 obj.AfterRun();
             }
         }
