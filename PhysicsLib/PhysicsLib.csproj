@@ -46,6 +46,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CirclePhysics.cs" />
     <Compile Include="MatrixPhysics.cs" />
     <Compile Include="PhysicsObject.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
