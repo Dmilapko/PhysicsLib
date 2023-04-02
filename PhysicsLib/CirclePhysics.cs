@@ -16,12 +16,18 @@ namespace PhysicsLib
         public List<Point> myrects = new List<Point>(4);
         public PointD speed;
         public double radius;
+        internal bool to_delete = false;
 
         public CircleObject (PointD _pos, double _mass, double _radius)
         {
             position = _pos;
             mass = _mass;    
             radius = _radius;
+        }
+
+        public virtual void Delete()
+        {
+            to_delete = true;
         }
 
         public virtual void Run()
@@ -33,13 +39,14 @@ namespace PhysicsLib
     public class CirclePhysics
     {
         public List<CircleObject> circleobjects = new List<CircleObject>();
-        List<int>[,] presens_array;
+        public List<int>[,] presens_array;
         public Rectangle map_range;
         int max_radius_of_particle;
-        public int fps = 0;
+        int fps { get { return screen_fps * precision; } }
+        public int screen_fps = 0;
         public int precision = 0;
 
-        public CirclePhysics(int _max_radius_of_particle, Rectangle _map_range, int _fps, int _precision)
+        public CirclePhysics(int _max_radius_of_particle, Rectangle _map_range, int _screen_fps, int _precision)
         {
             max_radius_of_particle = _max_radius_of_particle;
             map_range = _map_range;
@@ -52,7 +59,7 @@ namespace PhysicsLib
                 }
             }
 
-            fps = _fps;
+            screen_fps = _screen_fps;
             precision = _precision;
         }
 
@@ -158,48 +165,53 @@ namespace PhysicsLib
 
         public virtual void Collide(int i, int j)
         {
-            if ((circleobjects[i].position - circleobjects[j].position).Length() < (circleobjects[i].radius + circleobjects[j].radius))
+            double t = 0;
+            PointD posi = circleobjects[i].position, posj = circleobjects[j].position;
             {
-                PointD posi = circleobjects[i].position, posj = circleobjects[j].position;
-                double sr = circleobjects[i].radius + circleobjects[j].radius;
-                double t = 1, div = 2;
-                for (int c = 0; c < precision; c++)
+                double b = (posi - posj).Length();
+                double r = circleobjects[i].radius + circleobjects[j].radius;
+                double alpha = FA((circleobjects[j].speed - circleobjects[i].speed).Angle(), (posj - posi).Angle());
+                double beta = Math.Asin(b * Math.Sin(alpha) / r);
+                double gamma = Math.PI - alpha - beta;
+                double c = Math.Sin(gamma) * r / Math.Sin(alpha);
+                t = c / (circleobjects[j].speed + circleobjects[i].speed).Length() * fps;
+                if (t>=1)
                 {
-                    PointD p_posi = posi - 1 / div * circleobjects[i].speed, p_posj = posj - 1 / div * circleobjects[j].speed;
-                    if ((p_posi - p_posj).Length() < sr)
-                    {
-                        t -= 1 / div;
-                        posi = p_posi; posj = p_posj;
-                    }
-                    div *= 2;
+                        
                 }
-                if (t == 2 / div) 
+
+            }
+            if (t >= 0 && t <= 1) 
+            {
+                posi -= t * circleobjects[i].speed / (double)fps;
+                posj -= t * circleobjects[j].speed / (double)fps;
+                double anglei = (posj - posi).Angle();
+                double anglej = (posi - posj).Angle();
+                double alpha = FA(circleobjects[i].speed.Angle(), anglei);
+                double beta = FA(circleobjects[j].speed.Angle(), anglej);
+                double force_i = Math.Cos(alpha) * circleobjects[i].speed.Length();
+                double force_j = Math.Cos(beta) * circleobjects[j].speed.Length();
+                double mass_coef = circleobjects[i].mass / (circleobjects[i].mass + circleobjects[j].mass);
+                circleobjects[j].speed += mass_coef * new PointD((force_j + force_i) * Math.Sin(anglei), (force_j + force_i) * Math.Cos(anglei));
+                circleobjects[i].speed += (1 - mass_coef) * new PointD((force_j + force_i) * Math.Sin(anglej), (force_j + force_i) * Math.Cos(anglej));
+                posi += t * circleobjects[i].speed / (double)fps;
+                posj += t * circleobjects[j].speed / (double)fps;
+                circleobjects[i].position = posi; circleobjects[j].position = posj;
+            }
+            else
+            {
+                double d = (circleobjects[i].radius + circleobjects[j].radius) - (circleobjects[i].position - circleobjects[j].position).Length();
+                if (d > 0)
                 {
-                    double d = (circleobjects[i].radius + circleobjects[j].radius) - (circleobjects[i].position - circleobjects[j].position).Length();
-                    if (d > 0)
-                    {
-                        double angle = (circleobjects[i].position - circleobjects[j].position).Angle();
-                        double mass_coef = circleobjects[i].mass / (circleobjects[i].mass + circleobjects[j].mass);
-                        circleobjects[i].position.X += Math.Sin(angle) * d * (1 - mass_coef);
-                        circleobjects[i].position.Y += Math.Cos(angle) * d * (1 - mass_coef);
-                        circleobjects[j].position.X -= Math.Sin(angle) * d * mass_coef;
-                        circleobjects[j].position.Y -= Math.Cos(angle) * d * mass_coef;
-                    }
-                }
-                else
-                {
-                    double anglei = (posj - posi).Angle();
-                    double anglej = (posi - posj).Angle();
-                    double alpha = FA(circleobjects[i].speed.Angle(), anglei);
-                    double beta = FA(circleobjects[j].speed.Angle(), anglej);
-                    double force_i = Math.Cos(alpha) * circleobjects[i].speed.Length();
-                    double force_j = Math.Cos(beta) * circleobjects[j].speed.Length();
+                    //PointD prev_posi = posi - circleobjects[i].speed / fps, prev_posj = posj - circleobjects[j].speed / fps;
+                    double angle = (circleobjects[i].position - circleobjects[j].position).Angle();
                     double mass_coef = circleobjects[i].mass / (circleobjects[i].mass + circleobjects[j].mass);
-                    circleobjects[j].speed += mass_coef * new PointD((force_j + force_i) * Math.Sin(anglei), (force_j + force_i) * Math.Cos(anglei)) / 2;
-                    circleobjects[i].speed += (1 - mass_coef) * new PointD((force_j + force_i) * Math.Sin(anglej), (force_j + force_i) * Math.Cos(anglej)) / 2;
-                    posi += (1 - t) * circleobjects[i].speed;
-                    posj += (1 - t) * circleobjects[j].speed;
-                    circleobjects[i].position = posi; circleobjects[j].position = posj;
+                    circleobjects[i].position.X += Math.Sin(angle) * d * (1 - mass_coef);
+                    circleobjects[i].position.Y += Math.Cos(angle) * d * (1 - mass_coef);
+                    circleobjects[j].position.X -= Math.Sin(angle) * d * mass_coef;
+                    circleobjects[j].position.Y -= Math.Cos(angle) * d * mass_coef;
+                    //circleobjects[i].speed = circleobjects[i].position - prev_posi;
+                    //circleobjects[j].speed = circleobjects[j].position - prev_posj;
                 }
             }
         }
@@ -210,30 +222,38 @@ namespace PhysicsLib
             {
                 circle.Run();
             }
-            MakeLocation();
-            List<PointD> prevpos = new List<PointD>();
-            foreach (CircleObject obj in circleobjects)
+            for (int x = 0; x < precision; x++)
             {
-                prevpos.Add(obj.position);
-                obj.position += obj.speed / fps;
-            }
-            for (int i = 0; i < circleobjects.Count; i++)
-            {
-                foreach (var rect in circleobjects[i].myrects)
+                MakeLocation();
+                List<PointD> prevpos = new List<PointD>();
+                foreach (CircleObject obj in circleobjects)
                 {
-                    if (presens_array[rect.X, rect.Y].Count == 1) continue;
-                    for (int c = 0; c < presens_array[rect.X, rect.Y].Count; c++)
+                    prevpos.Add(obj.position);
+                    obj.position += obj.speed / fps;
+                }
+                for (int i = 0; i < circleobjects.Count; i++) if (!circleobjects[i].to_delete)
+                {
+                    foreach (var rect in circleobjects[i].myrects)
                     {
-                        int j = presens_array[rect.X, rect.Y][c];
-                        if (i == j) continue;
-                        Collide(i, j);
+                        if (presens_array[rect.X, rect.Y].Count == 1) continue;
+                        for (int c = 0; c < presens_array[rect.X, rect.Y].Count; c++)
+                        {
+                            int j = presens_array[rect.X, rect.Y][c];
+                            if ((i == j) || circleobjects[j].to_delete) continue;
+                            if ((circleobjects[i].position - circleobjects[j].position).Length() < (circleobjects[i].radius + circleobjects[j].radius)) Collide(i, j);
+                        }
                     }
                 }
+                for (int i = 0; i < circleobjects.Count; i++)
+                {
+                    if (circleobjects[i].to_delete)
+                    {
+                        circleobjects.RemoveAt(i);
+                        i--;
+                    }
+                }
+                MakeLocation();
             }
-          /*  for (int i = 0; i < circleobjects.Count; i++)
-            {
-                circleobjects[i].speed = (circleobjects[i].position - prevpos[i]) * fps;
-            }*/
         }
     }
 }
