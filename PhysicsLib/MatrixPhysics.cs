@@ -46,6 +46,8 @@ namespace Physics
             public event EventHandler on_collision = null;
             public double friction_coefficient;
             public bool active = true;
+            public List<bool> ever_collided = new List<bool>();
+            public List<bool> now_collided = new List<bool>();
 
             public MP_Object(double _MomentOfInertiaKoef, double _mass, double _friction_coefficient, PointD _position)
             {
@@ -55,6 +57,8 @@ namespace Physics
                 friction_coefficient = _friction_coefficient;
                 InitializePoints();
                 InitializeDeathPoints();
+                for (int i = 0; i < hitpoints.Count; i++) ever_collided.Add(false);
+                for (int i = 0; i < hitpoints.Count; i++) now_collided.Add(false);
             }
 
             public virtual void InitializePoints()
@@ -412,7 +416,7 @@ namespace Physics
                 nextrotation = nextrotation % 360.ToRadians();
 
                 List<Collision> collisions = new List<Collision>();
-
+                int curp = 0;
                 foreach (PointD point in obj.hitpoints)
                 {
                     //Наступна позиція даної точки
@@ -423,6 +427,8 @@ namespace Physics
                         if (res == true)
                         {
                             bool? is_inside = GetMatrixState(GetMatrixPosition(point, obj.position, obj.rotation));//якщо позиція вже всередині
+                            obj.ever_collided[curp] = true;
+                            obj.now_collided[curp] = true;
                             if (is_inside == true)
                             {
                                 double surf_angle = GetSurfaceAngle(col_pos.X * pim); // нахил поверхності
@@ -464,6 +470,11 @@ namespace Physics
                                 // parallel_to_surface = speed * cos(col_angle)
                             }
                         }
+                        else
+                        {
+                            obj.now_collided[curp] = false;
+                        }
+                        curp++;
                     }
                     else
                     {

@@ -134,7 +134,7 @@ namespace PhysicsLib
             return true;
         }
 
-        private void MakeLocation()
+        public void MakeLocation()
         {
             for (int i = 0; i < presens_array.GetLength(0); i++)
             {

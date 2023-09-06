@@ -33,8 +33,7 @@ namespace Physics
 
     public class PhysicsObject
     {
-        //public delegate void MOIF();
-        //public MOIF MonentOfInertia;
+        //public MonentOfInertia;
         public double MonentOfInertiaKoef;
         /// <summary>
         /// Angular speed in degrees per second
